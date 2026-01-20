@@ -3,10 +3,6 @@ use std::time::Duration;
 use smithay_client_toolkit::activation::RequestData;
 use smithay_client_toolkit::reexports::calloop::{EventLoop, LoopHandle};
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
-pub use smithay_client_toolkit::seat::{
-    keyboard,
-    pointer::{PointerEvent, PointerEventKind},
-};
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState},
     compositor::{CompositorHandler, CompositorState},
@@ -38,6 +34,17 @@ use wayland_client::{
     globals::registry_queue_init,
     protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
 };
+
+pub use smithay_client_toolkit::seat::{
+    keyboard,
+    pointer::{PointerEvent, PointerEventKind},
+};
+
+// Todo.
+// -  Wrap draw type arguments with Frame struct
+// -  More information to update like keyboard state.
+// -  Potientially merge event and update, so update just recieves a queue of events it can iterate
+//    through like pygame.get_events or whatever its called
 
 pub trait WindowAble {
     /// Ran before draw so you can set up your scene with information from `context`
@@ -73,125 +80,17 @@ pub trait WindowAble {
 
 #[derive(Debug)]
 pub enum Event {
-    KeyEvent(KeyEvent),
+    KeyPress(KeyEvent),
+    KeyRelease(KeyEvent),
     PointerEvent(PointerEvent),
     CloseRequested,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Context {
     pub delta_time: std::time::Duration,
+    pub pressed_keys: Vec<Keysym>,
     pub close_requested: bool,
-}
-
-pub fn run(state: Box<dyn WindowAble>, width: u32, height: u32) {
-    env_logger::init();
-
-    // All Wayland apps start by connecting the compositor (server).
-    let conn = Connection::connect_to_env().unwrap();
-
-    // Enumerate the list of globals to get the protocols the server implements.
-    let (globals, event_queue) = registry_queue_init(&conn).unwrap();
-    let qh = event_queue.handle();
-    let mut event_loop: EventLoop<WindowManager> =
-        EventLoop::try_new().expect("Failed to initialize the event loop!");
-    let loop_handle = event_loop.handle();
-    WaylandSource::new(conn.clone(), event_queue)
-        .insert(loop_handle)
-        .unwrap();
-
-    // The compositor (not to be confused with the server which is commonly called the compositor) allows
-    // configuring surfaces to be presented.
-    let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor not available");
-    // For desktop platforms, the XDG shell is the standard protocol for creating desktop windows.
-    let xdg_shell = XdgShell::bind(&globals, &qh).expect("xdg shell is not available");
-    // Since we are not using the GPU in this example, we use wl_shm to allow software rendering to a buffer
-    // we share with the compositor process.
-    let shm = Shm::bind(&globals, &qh).expect("wl shm is not available.");
-    // If the compositor supports xdg-activation it probably wants us to use it to get focus
-    let xdg_activation = ActivationState::bind(&globals, &qh).ok();
-
-    // A window is created from a surface.
-    let surface = compositor.create_surface(&qh);
-    // And then we can create the window.
-    let window = xdg_shell.create_window(surface, WindowDecorations::RequestServer, &qh);
-    // Configure the window, this may include hints to the compositor about the desired minimum size of the
-    // window, app id for WM identification, the window title, etc.
-    window.set_title("A wayland window");
-    // GitHub does not let projects use the `org.github` domain but the `io.github` domain is fine.
-    window.set_app_id("io.github.smithay.client-toolkit.SimpleWindow");
-    window.set_min_size(Some((256, 256)));
-
-    // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.
-    // For more info, see WaylandSurface::commit
-    //
-    // The compositor will respond with an initial configure that we can then use to present to the window with
-    // the correct options.
-    window.commit();
-
-    // To request focus, we first need to request a token
-    if let Some(activation) = xdg_activation.as_ref() {
-        activation.request_token(
-            &qh,
-            RequestData {
-                seat_and_serial: None,
-                surface: Some(window.wl_surface().clone()),
-                app_id: Some(String::from(
-                    "io.github.smithay.client-toolkit.SimpleWindow",
-                )),
-            },
-        )
-    }
-
-    // We don't know how large the window will be yet, so lets assume the minimum size we suggested for the
-    // initial memory allocation.
-    let pool = SlotPool::new((width * height * 4) as usize, &shm).expect("Failed to create pool");
-
-    let mut window_manager = WindowManager {
-        // Seats and outputs may be hotplugged at runtime, therefore we need to setup a registry state to
-        // listen for seats and outputs.
-        registry_state: RegistryState::new(&globals),
-        seat_state: SeatState::new(&globals, &qh),
-        output_state: OutputState::new(&globals, &qh),
-        shm,
-        xdg_activation,
-
-        exit: false,
-        first_configure: true,
-        pool,
-        width,
-        height,
-        buffer: None,
-        window,
-        keyboard: None,
-        keyboard_focus: false,
-        pointer: None,
-        loop_handle: event_loop.handle(),
-
-        managed_window: state,
-    };
-
-    // We don't draw immediately, the configure will notify us when to first draw.
-    let mut last_frame_time = std::time::Instant::now();
-    loop {
-        let current_frame_time = std::time::Instant::now();
-        let delta_time = last_frame_time - current_frame_time;
-
-        window_manager.managed_window.update(Context {
-            delta_time,
-            close_requested: false,
-        });
-
-        event_loop
-            .dispatch(Duration::from_millis(16), &mut window_manager)
-            .unwrap();
-
-        if window_manager.exit {
-            println!("exiting example");
-            break;
-        }
-        last_frame_time = std::time::Instant::now();
-    }
 }
 
 struct WindowManager {
@@ -214,6 +113,7 @@ struct WindowManager {
     loop_handle: LoopHandle<'static, WindowManager>,
 
     managed_window: Box<dyn WindowAble>,
+    context: Context,
 }
 
 impl CompositorHandler for WindowManager {
@@ -442,7 +342,10 @@ impl KeyboardHandler for WindowManager {
         event: KeyEvent,
     ) {
         println!("Key press: {event:?}");
-        self.managed_window.event(Event::KeyEvent(event));
+        self.managed_window.event(Event::KeyPress(event.clone()));
+
+        self.context.pressed_keys.dedup(); // Shouldnt ever be needed but could happen maybe??
+        self.context.pressed_keys.push(event.keysym);
     }
 
     fn repeat_key(
@@ -465,7 +368,8 @@ impl KeyboardHandler for WindowManager {
         event: KeyEvent,
     ) {
         println!("Key release: {event:?}");
-        self.managed_window.event(Event::KeyEvent(event));
+        self.managed_window.event(Event::KeyRelease(event.clone()));
+        self.context.pressed_keys.retain(|&key| key != event.keysym);
     }
 
     fn update_modifiers(
@@ -562,6 +466,122 @@ impl WindowManager {
             .attach_to(self.window.wl_surface())
             .expect("buffer attach");
         self.window.commit();
+    }
+}
+
+pub fn run(state: Box<dyn WindowAble>, width: u32, height: u32) {
+    env_logger::init();
+
+    // All Wayland apps start by connecting the compositor (server).
+    let conn = Connection::connect_to_env().unwrap();
+
+    // Enumerate the list of globals to get the protocols the server implements.
+    let (globals, event_queue) = registry_queue_init(&conn).unwrap();
+    let qh = event_queue.handle();
+    let mut event_loop: EventLoop<WindowManager> =
+        EventLoop::try_new().expect("Failed to initialize the event loop!");
+    let loop_handle = event_loop.handle();
+    WaylandSource::new(conn.clone(), event_queue)
+        .insert(loop_handle)
+        .unwrap();
+
+    // The compositor (not to be confused with the server which is commonly called the compositor) allows
+    // configuring surfaces to be presented.
+    let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor not available");
+    // For desktop platforms, the XDG shell is the standard protocol for creating desktop windows.
+    let xdg_shell = XdgShell::bind(&globals, &qh).expect("xdg shell is not available");
+    // Since we are not using the GPU in this example, we use wl_shm to allow software rendering to a buffer
+    // we share with the compositor process.
+    let shm = Shm::bind(&globals, &qh).expect("wl shm is not available.");
+    // If the compositor supports xdg-activation it probably wants us to use it to get focus
+    let xdg_activation = ActivationState::bind(&globals, &qh).ok();
+
+    // A window is created from a surface.
+    let surface = compositor.create_surface(&qh);
+    // And then we can create the window.
+    let window = xdg_shell.create_window(surface, WindowDecorations::RequestServer, &qh);
+    // Configure the window, this may include hints to the compositor about the desired minimum size of the
+    // window, app id for WM identification, the window title, etc.
+    window.set_title("A wayland window");
+    // GitHub does not let projects use the `org.github` domain but the `io.github` domain is fine.
+    window.set_app_id("io.github.smithay.client-toolkit.SimpleWindow");
+    window.set_min_size(Some((256, 256)));
+
+    // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.
+    // For more info, see WaylandSurface::commit
+    //
+    // The compositor will respond with an initial configure that we can then use to present to the window with
+    // the correct options.
+    window.commit();
+
+    // To request focus, we first need to request a token
+    if let Some(activation) = xdg_activation.as_ref() {
+        activation.request_token(
+            &qh,
+            RequestData {
+                seat_and_serial: None,
+                surface: Some(window.wl_surface().clone()),
+                app_id: Some(String::from(
+                    "io.github.smithay.client-toolkit.SimpleWindow",
+                )),
+            },
+        )
+    }
+
+    // We don't know how large the window will be yet, so lets assume the minimum size we suggested for the
+    // initial memory allocation.
+    let pool = SlotPool::new((width * height * 4) as usize, &shm).expect("Failed to create pool");
+
+    let mut window_manager = WindowManager {
+        // Seats and outputs may be hotplugged at runtime, therefore we need to setup a registry state to
+        // listen for seats and outputs.
+        registry_state: RegistryState::new(&globals),
+        seat_state: SeatState::new(&globals, &qh),
+        output_state: OutputState::new(&globals, &qh),
+        shm,
+        xdg_activation,
+
+        exit: false,
+        first_configure: true,
+        pool,
+        width,
+        height,
+        buffer: None,
+        window,
+        keyboard: None,
+        keyboard_focus: false,
+        pointer: None,
+        loop_handle: event_loop.handle(),
+
+        managed_window: state,
+        context: Context {
+            delta_time: std::time::Duration::from_millis(0),
+            pressed_keys: Vec::new(),
+            close_requested: false,
+        },
+    };
+
+    // We don't draw immediately, the configure will notify us when to first draw.
+    let mut last_frame_time = std::time::Instant::now();
+    loop {
+        let current_frame_time = std::time::Instant::now();
+        let delta_time = last_frame_time - current_frame_time;
+
+        window_manager.context.delta_time = delta_time;
+
+        window_manager
+            .managed_window
+            .update(window_manager.context.clone());
+
+        event_loop
+            .dispatch(Duration::from_millis(16), &mut window_manager)
+            .unwrap();
+
+        if window_manager.exit {
+            println!("exiting example");
+            break;
+        }
+        last_frame_time = std::time::Instant::now();
     }
 }
 
