@@ -2,15 +2,14 @@
 A simple library for creating a wayland window and manipulating its raw pixel buffer.
 
 ## Use case
-For when you want to create a simple CPU rendered application like a software rasteriser or doom like game, and do not need GPU acceleration or higher level drawcalls.
-
+For when you want to create a simple CPU rendered application like a software rasteriser or a doom like game, and do not need GPU acceleration.
 
 # Example application
 
 ```rust
 struct State {
-    pos_x: u32,
-    pos_y: u32,
+    pos_x: f32,
+    pos_y: f32,
 }
 
 impl wlib::WindowAble for State {
@@ -19,11 +18,9 @@ impl wlib::WindowAble for State {
             let x = ((index as u32) % width) + 1;
             let y = (index as u32 / width) + 1;
 
-            if x == self.pos_x || y == self.pos_y {
-                let color: u32 = 0;
-
+            if x == self.pos_x as u32 || y == self.pos_y as u32 {
                 let array: &mut [u8; 4] = chunk.try_into().unwrap();
-                *array = color.to_le_bytes();
+                *array = [0, 0, 0, 0];
                 continue;
             }
 
@@ -43,26 +40,36 @@ impl wlib::WindowAble for State {
     }
 
     fn update(&mut self, context: wlib::Context) {
-        println!("event: {context:#?}");
+        println!("Context: {context:#?}");
+
+        let speed = 200.0 * context.delta_time.as_secs_f32();
+
         for keysym in context.pressed_keys.iter() {
-            if *keysym == wlib::keyboard::Keysym::from_char('w') && self.pos_y > 2 {
-                self.pos_y -= 2
+            if *keysym == wlib::keyboard::Keysym::from_char('w') && self.pos_y > 0.0 {
+                self.pos_y -= speed;
             }
             if *keysym == wlib::keyboard::Keysym::from_char('s') {
-                self.pos_y += 2
+                self.pos_y += speed;
             }
 
-            if *keysym == wlib::keyboard::Keysym::from_char('a') && self.pos_x > 2 {
-                self.pos_x -= 2
+            if *keysym == wlib::keyboard::Keysym::from_char('a') && self.pos_x > 0.0 {
+                self.pos_x -= speed;
             }
             if *keysym == wlib::keyboard::Keysym::from_char('d') {
-                self.pos_x += 2
+                self.pos_x += speed;
             }
         }
     }
 }
 
 fn main() {
-    wlib::run(Box::new(State { pos_x: 0, pos_y: 0 }), 200, 200);
+    wlib::run(Box::new(State {
+        pos_x: 10.0,
+        pos_y: 10.0,
+    }));
 }
 ```
+
+outputs: 
+
+<img width="500" height="500" alt="image" src="https://github.com/user-attachments/assets/517b9fa0-9879-4724-a9ec-d2c24b0bd42b" />
