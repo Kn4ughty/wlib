@@ -26,10 +26,6 @@ impl wlib::WindowAble for State {
         }
     }
 
-    fn event(&mut self, event: wlib::Event) {
-        println!("event: {event:#?}");
-    }
-
     fn update(&mut self, context: wlib::Context) {
         println!("Context: {context:#?}");
 

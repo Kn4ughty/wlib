@@ -73,12 +73,9 @@ pub trait WindowAble {
     /// }
     /// ```
     fn draw(&mut self, image_buffer: &mut [u8], width: u32, height: u32);
-
-    /// Ran when there is an event.
-    fn event(&mut self, event: Event);
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Event {
     KeyPress(KeyEvent),
     KeyRelease(KeyEvent),
@@ -91,6 +88,9 @@ pub struct Context {
     pub delta_time: std::time::Duration,
     pub pressed_keys: Vec<Keysym>,
     pub close_requested: bool,
+    /// List of events since the last frame.
+    /// Use it if you specfically need keyup/keydown events
+    pub event_queue: Vec<Event>,
 }
 
 struct WindowManager {
@@ -156,6 +156,8 @@ impl CompositorHandler for WindowManager {
 
         self.managed_window.update(self.context.clone());
         self.draw(conn, qh);
+
+        self.context.event_queue.clear();
     }
 
     fn surface_enter(
@@ -353,7 +355,9 @@ impl KeyboardHandler for WindowManager {
         event: KeyEvent,
     ) {
         println!("Key press: {event:?}");
-        self.managed_window.event(Event::KeyPress(event.clone()));
+        self.context
+            .event_queue
+            .push(Event::KeyPress(event.clone()));
 
         self.context.pressed_keys.dedup(); // Shouldnt ever be needed but could happen maybe??
         self.context.pressed_keys.push(event.keysym);
@@ -379,7 +383,9 @@ impl KeyboardHandler for WindowManager {
         event: KeyEvent,
     ) {
         println!("Key release: {event:?}");
-        self.managed_window.event(Event::KeyRelease(event.clone()));
+        self.context
+            .event_queue
+            .push(Event::KeyRelease(event.clone()));
         self.context.pressed_keys.retain(|&key| key != event.keysym);
     }
 
@@ -411,8 +417,9 @@ impl PointerHandler for WindowManager {
                 continue;
             }
 
-            self.managed_window
-                .event(Event::PointerEvent(event.clone()));
+            self.context
+                .event_queue
+                .push(Event::PointerEvent(event.clone()));
         }
     }
 }
@@ -571,6 +578,7 @@ pub fn run(state: Box<dyn WindowAble>) {
             delta_time: std::time::Duration::from_millis(0),
             pressed_keys: Vec::new(),
             close_requested: false,
+            event_queue: Vec::new(),
         },
     };
 
