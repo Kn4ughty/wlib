@@ -31,18 +31,18 @@ impl wlib::WindowAble for State {
 
         let speed = 200.0 * context.delta_time.as_secs_f32();
 
-        for keysym in context.pressed_keys.iter() {
-            if *keysym == wlib::keyboard::Keysym::from_char('w') && self.pos_y > 0.0 {
+        for keysym in context.pressed_keys {
+            if keysym == wlib::keyboard::Keysym::from_char('w') && self.pos_y > 0.0 {
                 self.pos_y -= speed;
             }
-            if *keysym == wlib::keyboard::Keysym::from_char('s') {
+            if keysym == wlib::keyboard::Keysym::from_char('s') {
                 self.pos_y += speed;
             }
 
-            if *keysym == wlib::keyboard::Keysym::from_char('a') && self.pos_x > 0.0 {
+            if keysym == wlib::keyboard::Keysym::from_char('a') && self.pos_x > 0.0 {
                 self.pos_x -= speed;
             }
-            if *keysym == wlib::keyboard::Keysym::from_char('d') {
+            if keysym == wlib::keyboard::Keysym::from_char('d') {
                 self.pos_x += speed;
             }
         }
