@@ -3,6 +3,10 @@ use std::time::Duration;
 use smithay_client_toolkit::activation::RequestData;
 use smithay_client_toolkit::reexports::calloop::{EventLoop, LoopHandle};
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
+pub use smithay_client_toolkit::seat::{
+    keyboard,
+    pointer::{PointerEvent, PointerEventKind},
+};
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState},
     compositor::{CompositorHandler, CompositorState},
@@ -14,7 +18,7 @@ use smithay_client_toolkit::{
     seat::{
         Capability, SeatHandler, SeatState,
         keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
-        pointer::{PointerEvent, PointerHandler},
+        pointer::PointerHandler,
     },
     shell::{
         WaylandSurface,
@@ -28,6 +32,7 @@ use smithay_client_toolkit::{
         slot::{Buffer, SlotPool},
     },
 };
+
 use wayland_client::{
     Connection, QueueHandle,
     globals::registry_queue_init,
@@ -35,21 +40,48 @@ use wayland_client::{
 };
 
 pub trait WindowAble {
+    /// Ran before draw so you can set up your scene with information from `context`
+    fn update(&mut self, context: Context);
+
     /// Write your pixels to this buffer
-    fn draw(&mut self, image_buffer: &mut [u8]);
+    /// Since the window size is controlled by compositor, the width and height is given here.
+    /// # Example
+    /// ```rust
+    /// fn draw(&mut self, buffer: &mut [u8], width: u32, height: u32) {
+    ///     buffer
+    ///         .chunks_exact_mut(4)
+    ///         .enumerate()
+    ///         .for_each(|(index, chunk)| {
+    ///             let x = index as u32 % width;
+    ///             let y = index as u32 / height;
+    ///
+    ///             let a: u8 = 0xFF;
+    ///             let r: u8 = ((x as f32 / (width as f32)) * 255.0) as u8;
+    ///             let g: u8 = 0;
+    ///             let b: u8 = ((y as f32 / (height as f32)) * 255.0) as u8;
+    ///
+    ///             let array: &mut [u8; 4] = chunk.try_into().unwrap();
+    ///             *array = [b, g, r, a]
+    ///         });
+    /// }
+    /// ```
+    fn draw(&mut self, image_buffer: &mut [u8], width: u32, height: u32);
 
-    /// Ran when your window receives a key press
-    fn key_press(&mut self, event: KeyEvent);
+    /// Ran when there is an event.
+    fn event(&mut self, event: Event);
+}
 
-    /// Ran when your window receives a key release
-    fn key_release(&mut self, event: KeyEvent);
+#[derive(Debug)]
+pub enum Event {
+    KeyEvent(KeyEvent),
+    PointerEvent(PointerEvent),
+    CloseRequested,
+}
 
-    /// mouse event
-    fn mouse_event(&mut self, event: PointerEvent);
-
-    /// The window dimensions have changed
-    /// Not keeping this in sync with your own state is a logic error and will lead to a crash
-    fn update_window_size(&mut self, width: u32, height: u32);
+#[derive(Debug)]
+pub struct Context {
+    pub delta_time: std::time::Duration,
+    pub close_requested: bool,
 }
 
 pub fn run(state: Box<dyn WindowAble>, width: u32, height: u32) {
@@ -140,7 +172,16 @@ pub fn run(state: Box<dyn WindowAble>, width: u32, height: u32) {
     };
 
     // We don't draw immediately, the configure will notify us when to first draw.
+    let mut last_frame_time = std::time::Instant::now();
     loop {
+        let current_frame_time = std::time::Instant::now();
+        let delta_time = last_frame_time - current_frame_time;
+
+        window_manager.managed_window.update(Context {
+            delta_time,
+            close_requested: false,
+        });
+
         event_loop
             .dispatch(Duration::from_millis(16), &mut window_manager)
             .unwrap();
@@ -149,6 +190,7 @@ pub fn run(state: Box<dyn WindowAble>, width: u32, height: u32) {
             println!("exiting example");
             break;
         }
+        last_frame_time = std::time::Instant::now();
     }
 }
 
@@ -277,8 +319,6 @@ impl WindowHandler for WindowManager {
 
         // self.width = configure.new_size.0.map(|v| v.get()).unwrap();
         // self.height = configure.new_size.1.map(|v| v.get()).unwrap();
-        self.managed_window
-            .update_window_size(self.width, self.height);
 
         // Initiate the first draw.
         if self.first_configure {
@@ -402,7 +442,7 @@ impl KeyboardHandler for WindowManager {
         event: KeyEvent,
     ) {
         println!("Key press: {event:?}");
-        self.managed_window.key_press(event);
+        self.managed_window.event(Event::KeyEvent(event));
     }
 
     fn repeat_key(
@@ -425,7 +465,7 @@ impl KeyboardHandler for WindowManager {
         event: KeyEvent,
     ) {
         println!("Key release: {event:?}");
-        self.managed_window.key_release(event);
+        self.managed_window.event(Event::KeyEvent(event));
     }
 
     fn update_modifiers(
@@ -450,38 +490,14 @@ impl PointerHandler for WindowManager {
         _pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
-        // use PointerEventKind::*;
         for event in events {
             // Ignore events for other surfaces
             if &event.surface != self.window.wl_surface() {
                 continue;
             }
 
-            self.managed_window.mouse_event(event.clone());
-
-            // match event.kind {
-            //     Enter { .. } => {
-            //         println!("Pointer entered @{:?}", event.position);
-            //     }
-            //     Leave { .. } => {
-            //         println!("Pointer left");
-            //     }
-            //     Motion { .. } => {}
-            //     Press { button, .. } => {
-            //         println!("Press {:x} @ {:?}", button, event.position);
-            //         self.shift = self.shift.xor(Some(0));
-            //     }
-            //     Release { button, .. } => {
-            //         println!("Release {:x} @ {:?}", button, event.position);
-            //     }
-            //     Axis {
-            //         horizontal,
-            //         vertical,
-            //         ..
-            //     } => {
-            //         println!("Scroll H:{horizontal:?}, V:{vertical:?}");
-            //     }
-            // }
+            self.managed_window
+                .event(Event::PointerEvent(event.clone()));
         }
     }
 }
@@ -529,7 +545,7 @@ impl WindowManager {
         };
 
         // Draw to the window:
-        self.managed_window.draw(canvas);
+        self.managed_window.draw(canvas, self.width, self.height);
 
         // Damage the entire window
         self.window

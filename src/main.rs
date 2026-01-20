@@ -1,31 +1,20 @@
-struct State {
-    width: u32,
-    height: u32,
-}
+struct State {}
 
 impl wlib::WindowAble for State {
-    fn draw(&mut self, buffer: &mut [u8]) {
+    fn draw(&mut self, buffer: &mut [u8], width: u32, height: u32) {
+        // println!("width: {width}, height: {height}");
         buffer
             .chunks_exact_mut(4)
             .enumerate()
             .for_each(|(index, chunk)| {
-                let x = ((index as u32) % self.width) + 1;
-                let y = (index as u32 / self.width) + 1;
+                let x = ((index as u32) % width) + 1;
+                let y = (index as u32 / width) + 1;
                 // println!("{x}, {y}");
 
                 let a = 0xFF;
-                let r = u32::min(
-                    ((self.width - x) * 0xFF) / self.width,
-                    ((self.height - y) * 0xFF) / self.height,
-                );
-                let g = u32::min(
-                    (x * 0xFF) / self.width,
-                    ((self.height - y) * 0xFF) / self.height,
-                );
-                let b = u32::min(
-                    ((self.width - x) * 0xFF) / self.width,
-                    (y * 0xFF) / self.height,
-                );
+                let r = u32::min(((width - x) * 0xFF) / width, ((height - y) * 0xFF) / height);
+                let g = u32::min((x * 0xFF) / width, ((height - y) * 0xFF) / height);
+                let b = u32::min(((width - x) * 0xFF) / width, (y * 0xFF) / height);
                 let color = (a << 24) + (r << 16) + (g << 8) + b;
 
                 let array: &mut [u8; 4] = chunk.try_into().unwrap();
@@ -33,26 +22,15 @@ impl wlib::WindowAble for State {
             });
     }
 
-    fn key_press(&mut self, event: smithay_client_toolkit::seat::keyboard::KeyEvent) {
-        println!("kp: {:?}", event);
-    }
-    fn key_release(&mut self, event: smithay_client_toolkit::seat::keyboard::KeyEvent) {
-        println!("kr: {:?}", event);
-    }
-    fn mouse_event(&mut self, event: smithay_client_toolkit::seat::pointer::PointerEvent) {
-        println!("me: {:?}", event);
+    fn event(&mut self, event: wlib::Event) {
+        println!("event: {event:#?}");
     }
 
-    fn update_window_size(&mut self, width: u32, height: u32) {
-        self.width = width;
-        self.height = height;
+    fn update(&mut self, context: wlib::Context) {
+        println!("event: {context:#?}");
     }
 }
 
 fn main() {
-    let state = State {
-        width: 200,
-        height: 200,
-    };
-    wlib::run(Box::new(state), 200, 200);
+    wlib::run(Box::new(State {}), 200, 200);
 }
