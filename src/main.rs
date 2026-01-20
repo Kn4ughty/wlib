@@ -54,5 +54,5 @@ fn main() {
         width: 200,
         height: 200,
     };
-    wlib::init(Box::new(state), 200, 200);
+    wlib::run(Box::new(state), 200, 200);
 }

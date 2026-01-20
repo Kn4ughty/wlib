@@ -53,7 +53,7 @@ pub trait WindowAble {
     fn update_window_size(&mut self, width: u32, height: u32);
 }
 
-pub fn init(state: Box<dyn WindowAble>, width: u32, height: u32) {
+pub fn run(state: Box<dyn WindowAble>, width: u32, height: u32) {
     env_logger::init();
 
     // All Wayland apps start by connecting the compositor (server).
