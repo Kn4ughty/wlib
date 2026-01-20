@@ -39,9 +39,6 @@ pub trait WindowAble {
     ///
     fn draw(&mut self, buffer: &mut [u8]);
 
-    /// This is ran when the window requests to be closed.
-    fn request_close(&mut self);
-
     /// Ran when your window receives a key press
     fn key_press(&mut self, event: KeyEvent);
 
