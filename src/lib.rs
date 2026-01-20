@@ -111,6 +111,7 @@ struct WindowManager {
     keyboard_focus: bool,
     pointer: Option<wl_pointer::WlPointer>,
     loop_handle: LoopHandle<'static, WindowManager>,
+    last_frame_time: Option<std::time::Instant>,
 
     managed_window: Box<dyn WindowAble>,
     context: Context,
@@ -144,6 +145,16 @@ impl CompositorHandler for WindowManager {
         _surface: &wl_surface::WlSurface,
         _time: u32,
     ) {
+        let now = std::time::Instant::now();
+        let delta = self
+            .last_frame_time
+            .map(|last| now - last)
+            .unwrap_or(Duration::ZERO);
+
+        self.last_frame_time = Some(now);
+        self.context.delta_time = delta;
+
+        self.managed_window.update(self.context.clone());
         self.draw(conn, qh);
     }
 
@@ -469,8 +480,9 @@ impl WindowManager {
     }
 }
 
-pub fn run(state: Box<dyn WindowAble>, width: u32, height: u32) {
-    env_logger::init();
+pub fn run(state: Box<dyn WindowAble>) {
+    let width = 200;
+    let height = 200;
 
     // All Wayland apps start by connecting the compositor (server).
     let conn = Connection::connect_to_env().unwrap();
@@ -552,6 +564,7 @@ pub fn run(state: Box<dyn WindowAble>, width: u32, height: u32) {
         keyboard_focus: false,
         pointer: None,
         loop_handle: event_loop.handle(),
+        last_frame_time: None,
 
         managed_window: state,
         context: Context {
@@ -562,26 +575,15 @@ pub fn run(state: Box<dyn WindowAble>, width: u32, height: u32) {
     };
 
     // We don't draw immediately, the configure will notify us when to first draw.
-    let mut last_frame_time = std::time::Instant::now();
     loop {
-        let current_frame_time = std::time::Instant::now();
-        let delta_time = last_frame_time - current_frame_time;
-
-        window_manager.context.delta_time = delta_time;
-
-        window_manager
-            .managed_window
-            .update(window_manager.context.clone());
-
         event_loop
-            .dispatch(Duration::from_millis(16), &mut window_manager)
+            .dispatch(Duration::ZERO, &mut window_manager)
             .unwrap();
 
         if window_manager.exit {
             println!("exiting example");
             break;
         }
-        last_frame_time = std::time::Instant::now();
     }
 }
 
