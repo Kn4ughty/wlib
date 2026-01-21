@@ -52,15 +52,19 @@ pub trait WindowAble {
 
     /// Write your pixels to this buffer
     /// Since the window size is controlled by compositor, the width and height is given here.
+    /// Foramt is always ARGB little endian. (So real byte order is BGRA)
     /// # Example
     /// ```rust
-    /// fn draw(&mut self, buffer: &mut [u8], width: u32, height: u32) {
+    /// fn draw(&mut self, buffer: &mut [u8], frame: wlib::FrameInfo) {
+    ///     let width = frame.width;
+    ///     let height = frame.height;
+    ///
     ///     buffer
     ///         .chunks_exact_mut(4)
     ///         .enumerate()
     ///         .for_each(|(index, chunk)| {
     ///             let x = index as u32 % width;
-    ///             let y = index as u32 / height;
+    ///             let y = index as u32 / width;
     ///
     ///             let a: u8 = 0xFF;
     ///             let r: u8 = ((x as f32 / (width as f32)) * 255.0) as u8;
