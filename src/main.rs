@@ -4,7 +4,10 @@ struct State {
 }
 
 impl wlib::WindowAble for State {
-    fn draw(&mut self, buffer: &mut [u8], width: u32, height: u32) {
+    fn draw(&mut self, buffer: &mut [u8], frame: wlib::FrameInfo) {
+        let width = frame.width;
+        let height = frame.height;
+
         for (index, chunk) in buffer.chunks_exact_mut(4).enumerate() {
             let x = ((index as u32) % width) + 1;
             let y = (index as u32 / width) + 1;

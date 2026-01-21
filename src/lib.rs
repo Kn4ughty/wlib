@@ -72,7 +72,7 @@ pub trait WindowAble {
     ///         });
     /// }
     /// ```
-    fn draw(&mut self, image_buffer: &mut [u8], width: u32, height: u32);
+    fn draw(&mut self, buf: &mut [u8], frame_info: FrameInfo);
 }
 
 #[derive(Debug, Clone)]
@@ -115,6 +115,11 @@ struct WindowManager {
 
     managed_window: Box<dyn WindowAble>,
     context: Context,
+}
+
+pub struct FrameInfo {
+    pub width: u32,
+    pub height: u32,
 }
 
 impl CompositorHandler for WindowManager {
@@ -467,7 +472,13 @@ impl WindowManager {
         };
 
         // Draw to the window:
-        self.managed_window.draw(canvas, self.width, self.height);
+        self.managed_window.draw(
+            canvas,
+            FrameInfo {
+                width: self.width,
+                height: self.height,
+            },
+        );
 
         // Damage the entire window
         self.window
