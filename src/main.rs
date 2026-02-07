@@ -1,6 +1,7 @@
 struct State {
     pos_x: f32,
     pos_y: f32,
+    close_requested: bool,
 }
 
 impl wlib::WindowAble for State {
@@ -19,7 +20,13 @@ impl wlib::WindowAble for State {
             }
 
             let a = 0xFF;
-            let r = u32::min(((width - x) * 0xFF) / width, ((height - y) * 0xFF) / height);
+
+            let r = if self.close_requested {
+                255
+            } else {
+                u32::min(((width - x) * 0xFF) / width, ((height - y) * 0xFF) / height)
+            };
+
             let g = u32::min((x * 0xFF) / width, ((height - y) * 0xFF) / height);
             let b = u32::min(((width - x) * 0xFF) / width, (y * 0xFF) / height);
             let color = (a << 24) + (r << 16) + (g << 8) + b;
@@ -29,8 +36,18 @@ impl wlib::WindowAble for State {
         }
     }
 
-    fn update(&mut self, context: wlib::Context) {
+    fn update(&mut self, context: wlib::Context) -> Option<wlib::WLibRequest> {
         println!("Context: {context:#?}");
+
+        self.close_requested = context.close_requested;
+
+        if self.close_requested
+            && context
+                .pressed_keys
+                .contains(&wlib::keyboard::Keysym::from_char('y'))
+        {
+            return Some(wlib::WLibRequest::CloseAccepted);
+        }
 
         let speed = 200.0 * context.delta_time.as_secs_f32();
 
@@ -49,6 +66,8 @@ impl wlib::WindowAble for State {
                 self.pos_x += speed;
             }
         }
+
+        None
     }
 }
 
@@ -57,10 +76,11 @@ fn main() {
         Box::new(State {
             pos_x: 10.0,
             pos_y: 10.0,
+            close_requested: false,
         }),
         wlib::WLibSettings::new().with_static_size(wlib::WindowSize {
-            width: 255,
-            height: 255,
+            width: 400,
+            height: 400,
         }),
     );
 }

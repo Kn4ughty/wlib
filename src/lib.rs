@@ -48,7 +48,8 @@ pub use smithay_client_toolkit::seat::{
 
 pub trait WindowAble {
     /// Ran before draw so you can set up your scene with information from `context`
-    fn update(&mut self, context: Context);
+    /// You can include any requests you want wlib to do in in the returned output
+    fn update(&mut self, context: Context) -> Option<WLibRequest>;
 
     /// Write your pixels to this buffer
     /// Since the window size is controlled by compositor, the width and height is given here.
@@ -87,6 +88,13 @@ pub enum Event {
     CloseRequested,
 }
 
+/// Some information you want to tell WLib.
+pub enum WLibRequest {
+    /// This is so you can prompt for the user to save their work or confirm exit etc, before
+    /// closing the window
+    CloseAccepted,
+}
+
 #[derive(Debug, Clone)]
 pub struct Context {
     pub delta_time: std::time::Duration,
@@ -104,7 +112,7 @@ struct WindowManager {
     shm: Shm,
     xdg_activation: Option<ActivationState>,
 
-    exit: bool,
+    close_accepted: bool,
     first_configure: bool,
     pool: SlotPool,
     width: u32,
@@ -247,7 +255,7 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
         shm,
         xdg_activation,
 
-        exit: false,
+        close_accepted: false,
         first_configure: true,
         pool,
         width,
@@ -276,7 +284,7 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
             .dispatch(Duration::ZERO, &mut window_manager)
             .unwrap();
 
-        if window_manager.exit {
+        if window_manager.close_accepted {
             println!("exiting example");
             break;
         }
@@ -320,7 +328,9 @@ impl CompositorHandler for WindowManager {
         self.last_frame_time = Some(now);
         self.context.delta_time = delta;
 
-        self.managed_window.update(self.context.clone());
+        let request = self.managed_window.update(self.context.clone());
+        self.handle_update(request);
+
         self.draw(conn, qh);
 
         self.context.event_queue.clear();
@@ -379,7 +389,7 @@ impl OutputHandler for WindowManager {
 
 impl WindowHandler for WindowManager {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &Window) {
-        self.exit = true;
+        self.context.close_requested = true;
     }
 
     fn configure(
@@ -659,6 +669,13 @@ impl WindowManager {
             .attach_to(self.window.wl_surface())
             .expect("buffer attach");
         self.window.commit();
+    }
+
+    fn handle_update(&mut self, request: Option<WLibRequest>) {
+        match request {
+            Some(WLibRequest::CloseAccepted) => self.close_accepted = true,
+            None => {}
+        }
     }
 }
 
