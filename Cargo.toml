@@ -1,5 +1,7 @@
 [package]
 name = "wlib"
+description = "A simple wayland windowing library that gives you a pixel buffer and not much else"
+license = "MIT"
 version = "0.1.0"
 edition = "2024"
 
