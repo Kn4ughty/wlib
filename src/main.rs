@@ -4,7 +4,7 @@ struct State {
 }
 
 impl wlib::WindowAble for State {
-    fn draw(&mut self, buffer: &mut [u8], frame: wlib::FrameInfo) {
+    fn draw(&mut self, buffer: &mut [u8], frame: wlib::WindowSize) {
         let width = frame.width;
         let height = frame.height;
 
@@ -53,8 +53,14 @@ impl wlib::WindowAble for State {
 }
 
 fn main() {
-    wlib::run(Box::new(State {
-        pos_x: 10.0,
-        pos_y: 10.0,
-    }));
+    wlib::run(
+        Box::new(State {
+            pos_x: 10.0,
+            pos_y: 10.0,
+        }),
+        wlib::WLibSettings::new().with_static_size(wlib::WindowSize {
+            width: 255,
+            height: 255,
+        }),
+    );
 }
