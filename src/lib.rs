@@ -181,6 +181,7 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
     let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor not available");
     // For desktop platforms, the XDG shell is the standard protocol for creating desktop windows.
     let xdg_shell = XdgShell::bind(&globals, &qh).expect("xdg shell is not available");
+
     // Since we are not using the GPU in this example, we use wl_shm to allow software rendering to a buffer
     // we share with the compositor process.
     let shm = Shm::bind(&globals, &qh).expect("wl shm is not available.");
@@ -199,8 +200,6 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
 
     // GitHub does not let projects use the `org.github` domain but the `io.github` domain is fine.
     window.set_app_id(&settings.app_id);
-
-    // window.set_min_size(Some((256, 256)));
 
     // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.
     // For more info, see WaylandSurface::commit
@@ -224,6 +223,12 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
     }
 
     let (width, height) = if let Some(ref dimensions) = settings.window_static_size {
+        // If both min and max size are set to the same value, it means the size is static.
+        // from (niri docs)[https://github.com/YaLTeR/niri/wiki/Floating-Windows], if this is the
+        // case the window is set to be floating in tiling window managers
+        window.set_min_size(Some((dimensions.width, dimensions.height)));
+        window.set_max_size(Some((dimensions.width, dimensions.height)));
+
         (dimensions.width, dimensions.height)
     } else {
         (200, 200)
