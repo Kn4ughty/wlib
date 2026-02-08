@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::time::Duration;
 
 use smithay_client_toolkit::activation::RequestData;
@@ -97,12 +98,53 @@ pub enum WLibRequest {
 
 #[derive(Debug, Clone)]
 pub struct Context {
+    pub pressed_keys: HashSet<Keysym>,
+    pub mouse_state: MouseState,
+
     pub delta_time: std::time::Duration,
-    pub pressed_keys: Vec<Keysym>,
+
     pub close_requested: bool,
+    pub is_window_focused: bool,
+
     /// List of events since the last frame.
-    /// Use it if you specfically need keyup/keydown events
+    /// Use it if you specfically need mouse/key(up/down) events or specfic mouse motions.
     pub event_queue: Vec<Event>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MouseState {
+    /// mouse position on window
+    pub position: (f64, f64),
+    pub mouse_buttons_pressed: HashSet<MouseButton>,
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum MouseButton {
+    BtnLeft,
+    BtnRight,
+    BtnMiddle,
+    BtnSide,
+    BtnExtra,
+    BtnForward,
+    BtnBack,
+}
+
+impl TryFrom<u32> for MouseButton {
+    type Error = ();
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0x110 => Ok(MouseButton::BtnLeft),
+            0x111 => Ok(MouseButton::BtnRight),
+            0x112 => Ok(MouseButton::BtnMiddle),
+            0x113 => Ok(MouseButton::BtnSide),
+            0x114 => Ok(MouseButton::BtnExtra),
+            0x115 => Ok(MouseButton::BtnForward),
+            0x116 => Ok(MouseButton::BtnBack),
+            _ => Err(()),
+        }
+    }
 }
 
 struct WindowManager {
@@ -271,9 +313,15 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
         managed_window: state,
         context: Context {
             delta_time: std::time::Duration::from_millis(0),
-            pressed_keys: Vec::new(),
+            pressed_keys: HashSet::new(),
             close_requested: false,
             event_queue: Vec::new(),
+            is_window_focused: true,
+
+            mouse_state: MouseState {
+                position: (0.0, 0.0),
+                mouse_buttons_pressed: HashSet::new(),
+            },
         },
         settings,
     };
@@ -538,8 +586,7 @@ impl KeyboardHandler for WindowManager {
             .event_queue
             .push(Event::KeyPress(event.clone()));
 
-        self.context.pressed_keys.dedup(); // Shouldnt ever be needed but could happen maybe??
-        self.context.pressed_keys.push(event.keysym);
+        self.context.pressed_keys.insert(event.keysym);
     }
 
     fn repeat_key(
@@ -565,7 +612,7 @@ impl KeyboardHandler for WindowManager {
         self.context
             .event_queue
             .push(Event::KeyRelease(event.clone()));
-        self.context.pressed_keys.retain(|&key| key != event.keysym);
+        self.context.pressed_keys.remove(&event.keysym);
     }
 
     fn update_modifiers(
@@ -595,6 +642,37 @@ impl PointerHandler for WindowManager {
             if &event.surface != self.window.wl_surface() {
                 continue;
             }
+
+            use PointerEventKind as PEK;
+            match event.kind {
+                PEK::Press {
+                    time: _,
+                    button: b,
+                    serial: _,
+                } => {
+                    // So this is pretty annoying. The button code is defined in some c header file
+                    // https://wayland.app/protocols/wayland#wl_pointer:event:button
+                    println!("button press: {b}");
+                    if let Ok(bttn) = MouseButton::try_from(b) {
+                        self.context.mouse_state.mouse_buttons_pressed.insert(bttn);
+                    }
+                }
+                PEK::Release { button: b, .. } => {
+                    println!("button press: {b}");
+                    if let Ok(bttn) = MouseButton::try_from(b) {
+                        self.context.mouse_state.mouse_buttons_pressed.remove(&bttn);
+                    }
+                }
+                PEK::Enter { .. } => {
+                    self.context.is_window_focused = true;
+                }
+                PEK::Leave { .. } => {
+                    self.context.is_window_focused = false;
+                }
+                _ => {}
+            }
+
+            self.context.mouse_state.position = event.position;
 
             self.context
                 .event_queue

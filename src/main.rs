@@ -37,7 +37,7 @@ impl wlib::WindowAble for State {
     }
 
     fn update(&mut self, context: wlib::Context) -> Option<wlib::WLibRequest> {
-        println!("Context: {context:#?}");
+        println!("Context: {:#?}", context);
 
         self.close_requested = context.close_requested;
 
