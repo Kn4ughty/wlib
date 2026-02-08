@@ -47,6 +47,7 @@ pub use smithay_client_toolkit::seat::{
 // -  Potientially merge event and update, so update just recieves a queue of events it can iterate
 //    through like pygame.get_events or whatever its called
 
+/// The trait you must implement to create a window
 pub trait WindowAble {
     /// Ran before draw so you can set up your scene with information from `context`
     /// You can include any requests you want wlib to do in in the returned output
@@ -81,6 +82,7 @@ pub trait WindowAble {
     fn draw(&mut self, buf: &mut [u8], frame_info: WindowSize);
 }
 
+/// The possible event types you can get from `Context::event_queue`
 #[derive(Debug, Clone)]
 pub enum Event {
     KeyPress(KeyEvent),
@@ -96,14 +98,23 @@ pub enum WLibRequest {
     CloseAccepted,
 }
 
+/// The information passed to your `update()` each frame
 #[derive(Debug, Clone)]
 pub struct Context {
+    /// The currently pressed keys. Just a convinence field for the event_queue
     pub pressed_keys: HashSet<Keysym>,
+
+    /// State of the mouse
     pub mouse_state: MouseState,
 
+    /// Time since last frame
     pub delta_time: std::time::Duration,
 
+    /// Has the compositor requested this window been closed?
+    /// To accept, return a `WLibRequest::CloseAccepted`.
     pub close_requested: bool,
+
+    /// Self explanatory
     pub is_window_focused: bool,
 
     /// List of events since the last frame.
@@ -111,13 +122,17 @@ pub struct Context {
     pub event_queue: Vec<Event>,
 }
 
+/// State of the mouse
 #[derive(Debug, Clone)]
 pub struct MouseState {
     /// mouse position on window
     pub position: (f64, f64),
+    /// The mouse buttons currently pressed. Just a convinence field for the event_queue
     pub mouse_buttons_pressed: HashSet<MouseButton>,
 }
 
+/// Supported MouseButtons.
+/// If you need extra mouse buttons, look at the event queue and use numbers from `/usr/include/linux/input-event-codes.h`
 #[non_exhaustive]
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum MouseButton {
