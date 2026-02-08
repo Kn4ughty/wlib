@@ -216,13 +216,13 @@ impl WLibSettings {
         self
     }
 
-    pub fn with_title(mut self, title: String) -> Self {
-        self.window_title = title;
+    pub fn with_title(mut self, title: &str) -> Self {
+        self.window_title = title.to_string();
         self
     }
 
-    pub fn with_app_id(mut self, id: String) -> Self {
-        self.app_id = id;
+    pub fn with_app_id(mut self, id: &str) -> Self {
+        self.app_id = id.to_string();
         self
     }
 }
