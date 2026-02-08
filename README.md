@@ -11,7 +11,6 @@ For example, a doomlike game or a software rasteriser.
 - Confirm close
 
 
-
 ## Example
 
 [main.rs](https://github.com/Kn4ughty/wlib/blob/main/src/main.rs) outputs:

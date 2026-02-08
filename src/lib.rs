@@ -348,7 +348,7 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
             .unwrap();
 
         if window_manager.close_accepted {
-            println!("exiting example");
+            eprintln!("WLIB exiting");
             break;
         }
     }
@@ -463,7 +463,7 @@ impl WindowHandler for WindowManager {
         configure: WindowConfigure,
         _serial: u32,
     ) {
-        println!("Window configured to: {:?}", configure);
+        // println!("Window configured to: {:?}", configure);
 
         self.buffer = None;
 
@@ -509,7 +509,7 @@ impl SeatHandler for WindowManager {
         capability: Capability,
     ) {
         if capability == Capability::Keyboard && self.keyboard.is_none() {
-            println!("Set keyboard capability");
+            // println!("Set keyboard capability");
             let keyboard = self
                 .seat_state
                 .get_keyboard_with_repeat(
@@ -517,8 +517,8 @@ impl SeatHandler for WindowManager {
                     &seat,
                     None,
                     self.loop_handle.clone(),
-                    Box::new(|_state, _wl_kbd, event| {
-                        println!("Repeat: {:?} ", event);
+                    Box::new(|_state, _wl_kbd, _event| {
+                        // println!("Repeat: {:?} ", event);
                     }),
                 )
                 .expect("Failed to create keyboard");
@@ -527,7 +527,7 @@ impl SeatHandler for WindowManager {
         }
 
         if capability == Capability::Pointer && self.pointer.is_none() {
-            println!("Set pointer capability");
+            // println!("Set pointer capability");
             let pointer = self
                 .seat_state
                 .get_pointer(qh, &seat)
@@ -544,12 +544,12 @@ impl SeatHandler for WindowManager {
         capability: Capability,
     ) {
         if capability == Capability::Keyboard && self.keyboard.is_some() {
-            println!("Unset keyboard capability");
+            // println!("Unset keyboard capability");
             self.keyboard.take().unwrap().release();
         }
 
         if capability == Capability::Pointer && self.pointer.is_some() {
-            println!("Unset pointer capability");
+            // println!("Unset pointer capability");
             self.pointer.take().unwrap().release();
         }
     }
@@ -566,10 +566,10 @@ impl KeyboardHandler for WindowManager {
         surface: &wl_surface::WlSurface,
         _: u32,
         _: &[u32],
-        keysyms: &[Keysym],
+        _keysyms: &[Keysym],
     ) {
         if self.window.wl_surface() == surface {
-            println!("Keyboard focus on window with pressed syms: {keysyms:?}");
+            // println!("Keyboard focus on window with pressed syms: {keysyms:?}");
             self.keyboard_focus = true;
         }
     }
@@ -583,7 +583,7 @@ impl KeyboardHandler for WindowManager {
         _: u32,
     ) {
         if self.window.wl_surface() == surface {
-            println!("Release keyboard focus on window");
+            // println!("Release keyboard focus on window");
             self.keyboard_focus = false;
         }
     }
@@ -596,7 +596,7 @@ impl KeyboardHandler for WindowManager {
         _: u32,
         event: KeyEvent,
     ) {
-        println!("Key press: {event:?}");
+        // println!("Key press: {event:?}");
         self.context
             .event_queue
             .push(Event::KeyPress(event.clone()));
@@ -610,9 +610,9 @@ impl KeyboardHandler for WindowManager {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
-        event: KeyEvent,
+        _event: KeyEvent,
     ) {
-        println!("Key repeat: {event:?}");
+        // println!("Key repeat: {event:?}");
     }
 
     fn release_key(
@@ -623,7 +623,7 @@ impl KeyboardHandler for WindowManager {
         _: u32,
         event: KeyEvent,
     ) {
-        println!("Key release: {event:?}");
+        // println!("Key release: {event:?}");
         self.context
             .event_queue
             .push(Event::KeyRelease(event.clone()));
@@ -636,11 +636,11 @@ impl KeyboardHandler for WindowManager {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _serial: u32,
-        modifiers: Modifiers,
+        _modifiers: Modifiers,
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
-        println!("Update modifiers: {modifiers:?}");
+        // println!("Update modifiers: {modifiers:?}");
     }
 }
 
@@ -667,13 +667,13 @@ impl PointerHandler for WindowManager {
                 } => {
                     // So this is pretty annoying. The button code is defined in some c header file
                     // https://wayland.app/protocols/wayland#wl_pointer:event:button
-                    println!("button press: {b}");
+                    // println!("button press: {b}");
                     if let Ok(bttn) = MouseButton::try_from(b) {
                         self.context.mouse_state.mouse_buttons_pressed.insert(bttn);
                     }
                 }
                 PEK::Release { button: b, .. } => {
-                    println!("button press: {b}");
+                    // println!("button press: {b}");
                     if let Ok(bttn) = MouseButton::try_from(b) {
                         self.context.mouse_state.mouse_buttons_pressed.remove(&bttn);
                     }
