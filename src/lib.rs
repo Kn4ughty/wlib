@@ -1,3 +1,5 @@
+pub mod keys;
+
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -58,7 +60,7 @@ pub trait WindowAble {
     /// Foramt is always ARGB little endian. (So real byte order is BGRA)
     /// # Example
     /// ```rust
-    /// fn draw(&mut self, buffer: &mut [u8], frame: wlib::FrameInfo) {
+    /// fn draw(buffer: &mut [u8], frame: wlib::WindowSize) {
     ///     let width = frame.width;
     ///     let height = frame.height;
     ///
@@ -79,7 +81,7 @@ pub trait WindowAble {
     ///         });
     /// }
     /// ```
-    fn draw(&mut self, buf: &mut [u8], frame_info: WindowSize);
+    fn draw(&mut self, pixel_buffer: &mut [u8], frame_info: WindowSize);
 }
 
 /// The possible event types you can get from `Context::event_queue`
@@ -512,14 +514,13 @@ impl SeatHandler for WindowManager {
             // println!("Set keyboard capability");
             let keyboard = self
                 .seat_state
-                .get_keyboard_with_repeat(
-                    qh,
-                    &seat,
+                .get_keyboard(
+                    qh, &seat,
                     None,
-                    self.loop_handle.clone(),
-                    Box::new(|_state, _wl_kbd, _event| {
-                        // println!("Repeat: {:?} ", event);
-                    }),
+                    // self.loop_handle.clone(),
+                    // Box::new(|_state, _wl_kbd, _event| {
+                    //     // println!("Repeat: {:?} ", event);
+                    // }),
                 )
                 .expect("Failed to create keyboard");
 
@@ -596,12 +597,38 @@ impl KeyboardHandler for WindowManager {
         _: u32,
         event: KeyEvent,
     ) {
-        // println!("Key press: {event:?}");
+        println!("Key press: {event:#?}");
+        // keyboard::Keysym::raw(self)
         self.context
             .event_queue
             .push(Event::KeyPress(event.clone()));
+        println!(
+            "press rawkeysym: {:?}",
+            event.raw_code,
+            // xkeysym::Keysym::from(event.raw_code).key_char()
+        );
 
         self.context.pressed_keys.insert(event.keysym);
+    }
+
+    fn release_key(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: u32,
+        event: KeyEvent,
+    ) {
+        println!("Key release: {event:#?}");
+        self.context
+            .event_queue
+            .push(Event::KeyRelease(event.clone()));
+        self.context.pressed_keys.remove(&event.keysym);
+        println!(
+            "release rawkeysym: {:?}",
+            event.raw_code,
+            // xkeysym::Keysym::from(event.raw_code).key_char()
+        );
     }
 
     fn repeat_key(
@@ -613,21 +640,6 @@ impl KeyboardHandler for WindowManager {
         _event: KeyEvent,
     ) {
         // println!("Key repeat: {event:?}");
-    }
-
-    fn release_key(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
-        _: u32,
-        event: KeyEvent,
-    ) {
-        // println!("Key release: {event:?}");
-        self.context
-            .event_queue
-            .push(Event::KeyRelease(event.clone()));
-        self.context.pressed_keys.remove(&event.keysym);
     }
 
     fn update_modifiers(
