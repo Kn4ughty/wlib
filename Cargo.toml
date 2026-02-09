@@ -1,6 +1,3 @@
-
-workspace = { members = ["macros"] }
-
 [package]
 name = "wlib"
 description = "A simple wayland windowing library that gives you a pixel buffer and not much else"
@@ -9,7 +6,6 @@ version = "0.2.0"
 edition = "2024"
 
 [dependencies]
-macros = { path = "./macros", version = "*"}
 smithay-client-toolkit = "0.20.0"
 wayland-client = "0.31.12"
 xkb = "0.3.0"

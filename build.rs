@@ -1,10 +1,14 @@
 use std::path::PathBuf;
 
-extern crate proc_macro;
-use proc_macro::TokenStream;
+fn main() {
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let dest = out_dir.join("input_codes.rs");
 
-#[proc_macro]
-pub fn get_keys(_keys: TokenStream) -> TokenStream {
+    std::fs::write(dest, get_keys()).unwrap();
+    println!("cargo::rerun-if-changed=build.rs");
+}
+
+fn get_keys() -> String {
     let event_codes = get_event_codes().expect("Can get event codes");
 
     let mut output = String::new();
@@ -14,7 +18,7 @@ pub fn get_keys(_keys: TokenStream) -> TokenStream {
         output.push_str(&new);
     }
 
-    output.parse().expect("turn string to TokenStream")
+    output
 }
 
 fn event_codes_file_path() -> PathBuf {
