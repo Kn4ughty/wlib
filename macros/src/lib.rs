@@ -74,19 +74,19 @@ fn to_key_val(input: &[String]) -> Option<Vec<(String, u32)>> {
         let key = s.next().unwrap().to_string();
         let val_str = s.next().unwrap();
 
+        // Dont include weird things that reference other keys. Not needed
         if val_str.starts_with('(') {
-            // Dont include weird things that reference other keys. Not needed
             continue;
         }
+
+        let radix = if val_str.starts_with("0x") { 16 } else { 10 };
 
         let mut trimed = val_str.trim_start_matches("0x").trim_start_matches("0");
         if trimed.is_empty() {
             trimed = "0";
         }
 
-        println!("{trimed:#?}");
-
-        let Some(val) = u32::from_str_radix(trimed, 16).ok() else {
+        let Some(val) = u32::from_str_radix(trimed, radix).ok() else {
             continue;
         };
 
