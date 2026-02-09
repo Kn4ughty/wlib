@@ -12,30 +12,31 @@ impl WindowAble for State {
         let width = frame.width;
         let height = frame.height;
 
-        for (index, chunk) in buffer.chunks_exact_mut(4).enumerate() {
-            let x = ((index as u32) % width) + 1;
-            let y = (index as u32 / width) + 1;
+        for x in 0..frame.width {
+            for y in 0..frame.height {
+                let index = ((y * frame.width + x) * 4) as usize;
+                if x == self.pos_x as u32 || y == self.pos_y as u32 {
+                    buffer[index + 0] = 0;
+                    buffer[index + 1] = 0;
+                    buffer[index + 2] = 0;
+                    buffer[index + 3] = 0;
+                    continue;
+                }
 
-            if x == self.pos_x as u32 || y == self.pos_y as u32 {
-                let array: &mut [u8; 4] = chunk.try_into().unwrap();
-                *array = [0, 0, 0, 0];
-                continue;
+                let r = if self.close_requested {
+                    255
+                } else {
+                    u32::min(((width - x) * 0xFF) / width, ((height - y) * 0xFF) / height)
+                };
+                let g = u32::min((x * 0xFF) / width, ((height - y) * 0xFF) / height);
+                let b = u32::min(((width - x) * 0xFF) / width, (y * 0xFF) / height);
+                let a = 255;
+
+                buffer[index + 0] = b as u8;
+                buffer[index + 1] = g as u8;
+                buffer[index + 2] = r as u8;
+                buffer[index + 3] = a as u8;
             }
-
-            let a = 0xFF;
-
-            let r = if self.close_requested {
-                255
-            } else {
-                u32::min(((width - x) * 0xFF) / width, ((height - y) * 0xFF) / height)
-            };
-
-            let g = u32::min((x * 0xFF) / width, ((height - y) * 0xFF) / height);
-            let b = u32::min(((width - x) * 0xFF) / width, (y * 0xFF) / height);
-            let color = (a << 24) + (r << 16) + (g << 8) + b;
-
-            let array: &mut [u8; 4] = chunk.try_into().unwrap();
-            *array = color.to_le_bytes();
         }
     }
 
@@ -46,9 +47,9 @@ impl WindowAble for State {
             return Some(wlib::WLibRequest::CloseAccepted);
         }
 
-        if context.event_queue.iter().any(|e| {
+        if context.event_queue.iter().any(|event| {
             matches!(
-                e,
+                event,
                 wlib::Event::KeyPress(wlib::keyboard::KeyEvent {
                     raw_code: keys::KEY_M,
                     ..
