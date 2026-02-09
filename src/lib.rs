@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use smithay_client_toolkit::activation::RequestData;
-use smithay_client_toolkit::reexports::calloop::{EventLoop, LoopHandle};
+use smithay_client_toolkit::reexports::calloop::EventLoop;
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState},
@@ -178,7 +178,6 @@ struct WindowManager {
     keyboard: Option<wl_keyboard::WlKeyboard>,
     keyboard_focus: bool,
     pointer: Option<wl_pointer::WlPointer>,
-    loop_handle: LoopHandle<'static, WindowManager>,
     last_frame_time: Option<std::time::Instant>,
 
     managed_window: Box<dyn WindowAble>,
@@ -321,7 +320,6 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
         keyboard: None,
         keyboard_focus: false,
         pointer: None,
-        loop_handle: event_loop.handle(),
         last_frame_time: None,
 
         managed_window: state,
@@ -510,14 +508,7 @@ impl SeatHandler for WindowManager {
             // println!("Set keyboard capability");
             let keyboard = self
                 .seat_state
-                .get_keyboard(
-                    qh, &seat,
-                    None,
-                    // self.loop_handle.clone(),
-                    // Box::new(|_state, _wl_kbd, _event| {
-                    //     // println!("Repeat: {:?} ", event);
-                    // }),
-                )
+                .get_keyboard(qh, &seat, None)
                 .expect("Failed to create keyboard");
 
             self.keyboard = Some(keyboard);
