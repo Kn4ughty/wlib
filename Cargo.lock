@@ -739,7 +739,6 @@ name = "wlib"
 version = "0.1.3"
 dependencies = [
  "macros",
- "quote",
  "smithay-client-toolkit",
  "wayland-client",
  "xkb",

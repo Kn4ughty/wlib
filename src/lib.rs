@@ -1,6 +1,6 @@
 pub mod keys;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use smithay_client_toolkit::activation::RequestData;
@@ -44,10 +44,7 @@ pub use smithay_client_toolkit::seat::{
 };
 
 // Todo.
-// -  Wrap draw type arguments with Frame struct
 // -  More information to update like keyboard state.
-// -  Potientially merge event and update, so update just recieves a queue of events it can iterate
-//    through like pygame.get_events or whatever its called
 
 /// The trait you must implement to create a window
 pub trait WindowAble {
@@ -104,7 +101,7 @@ pub enum WLibRequest {
 #[derive(Debug, Clone)]
 pub struct Context {
     /// The currently pressed keys. Just a convinence field for the event_queue
-    pub pressed_keys: HashSet<Keysym>,
+    pub pressed_keys: HashMap<keys::RawKeyCode, keys::KeySym>,
 
     /// State of the mouse
     pub mouse_state: MouseState,
@@ -330,7 +327,7 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
         managed_window: state,
         context: Context {
             delta_time: std::time::Duration::from_millis(0),
-            pressed_keys: HashSet::new(),
+            pressed_keys: HashMap::new(),
             close_requested: false,
             event_queue: Vec::new(),
             is_window_focused: true,
@@ -350,7 +347,6 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
             .unwrap();
 
         if window_manager.close_accepted {
-            eprintln!("WLIB exiting");
             break;
         }
     }
@@ -597,18 +593,13 @@ impl KeyboardHandler for WindowManager {
         _: u32,
         event: KeyEvent,
     ) {
-        println!("Key press: {event:#?}");
-        // keyboard::Keysym::raw(self)
         self.context
             .event_queue
             .push(Event::KeyPress(event.clone()));
-        println!(
-            "press rawkeysym: {:?}",
-            event.raw_code,
-            // xkeysym::Keysym::from(event.raw_code).key_char()
-        );
 
-        self.context.pressed_keys.insert(event.keysym);
+        self.context
+            .pressed_keys
+            .insert(event.raw_code, event.keysym);
     }
 
     fn release_key(
@@ -619,16 +610,11 @@ impl KeyboardHandler for WindowManager {
         _: u32,
         event: KeyEvent,
     ) {
-        println!("Key release: {event:#?}");
         self.context
             .event_queue
             .push(Event::KeyRelease(event.clone()));
-        self.context.pressed_keys.remove(&event.keysym);
-        println!(
-            "release rawkeysym: {:?}",
-            event.raw_code,
-            // xkeysym::Keysym::from(event.raw_code).key_char()
-        );
+
+        self.context.pressed_keys.remove(&event.raw_code);
     }
 
     fn repeat_key(

@@ -12,7 +12,6 @@ edition = "2024"
 
 [dependencies]
 macros = { path = "./macros" }
-quote = "1.0.44"
 smithay-client-toolkit = "0.20.0"
 wayland-client = "0.31.12"
 xkb = "0.3.0"

@@ -1,10 +1,13 @@
+use wlib::{WindowAble, keys};
+
 struct State {
-    pos_x: f32,
-    pos_y: f32,
+    pos_x: f64,
+    pos_y: f64,
+    is_mouse_mode: bool,
     close_requested: bool,
 }
 
-impl wlib::WindowAble for State {
+impl WindowAble for State {
     fn draw(&mut self, buffer: &mut [u8], frame: wlib::WindowSize) {
         let width = frame.width;
         let height = frame.height;
@@ -37,34 +40,42 @@ impl wlib::WindowAble for State {
     }
 
     fn update(&mut self, context: wlib::Context) -> Option<wlib::WLibRequest> {
-        println!("Context: {:#?}", context);
-
         self.close_requested = context.close_requested;
 
-        if self.close_requested
-            && context
-                .pressed_keys
-                .contains(&wlib::keyboard::Keysym::from_char('y'))
-        {
+        if self.close_requested && context.pressed_keys.contains_key(&wlib::keys::KEY_Y) {
             return Some(wlib::WLibRequest::CloseAccepted);
         }
 
-        let speed = 200.0 * context.delta_time.as_secs_f32();
+        if context.event_queue.iter().any(|e| {
+            matches!(
+                e,
+                wlib::Event::KeyPress(wlib::keyboard::KeyEvent {
+                    raw_code: keys::KEY_M,
+                    ..
+                })
+            )
+        }) {
+            self.is_mouse_mode = !self.is_mouse_mode;
+        }
 
-        for keysym in context.pressed_keys {
-            if keysym == wlib::keyboard::Keysym::from_char('w') && self.pos_y > 0.0 {
-                self.pos_y -= speed;
-            }
-            if keysym == wlib::keyboard::Keysym::from_char('s') {
-                self.pos_y += speed;
-            }
+        let speed = 200.0 * context.delta_time.as_secs_f64();
 
-            if keysym == wlib::keyboard::Keysym::from_char('a') && self.pos_x > 0.0 {
-                self.pos_x -= speed;
-            }
-            if keysym == wlib::keyboard::Keysym::from_char('d') {
-                self.pos_x += speed;
-            }
+        // Handle keyboard input
+        if context.pressed_keys.contains_key(&keys::KEY_W) && self.pos_y > 0.0 {
+            self.pos_y -= speed;
+        }
+        if context.pressed_keys.contains_key(&keys::KEY_S) {
+            self.pos_y += speed;
+        }
+        if context.pressed_keys.contains_key(&keys::KEY_A) && self.pos_x > 0.0 {
+            self.pos_x -= speed;
+        }
+        if context.pressed_keys.contains_key(&keys::KEY_D) {
+            self.pos_x += speed;
+        }
+
+        if self.is_mouse_mode {
+            (self.pos_x, self.pos_y) = context.mouse_state.position;
         }
 
         None
@@ -76,6 +87,7 @@ fn main() {
         Box::new(State {
             pos_x: 10.0,
             pos_y: 10.0,
+            is_mouse_mode: false,
             close_requested: false,
         }),
         wlib::WLibSettings::new().with_static_size(wlib::WindowSize {
