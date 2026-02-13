@@ -1,3 +1,6 @@
+//!
+//!
+
 pub mod keys;
 
 use std::collections::{HashMap, HashSet};
@@ -185,6 +188,7 @@ struct WindowManager {
     context: Context,
 }
 
+/// The pixel size of a window
 pub struct WindowSize {
     pub width: u32,
     pub height: u32,
@@ -225,6 +229,7 @@ impl WLibSettings {
     }
 }
 
+/// Runs a struct implementing `WindowAble` by setting up a wayland event loop.
 pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
     // All Wayland apps start by connecting the compositor (server).
     let conn = Connection::connect_to_env().unwrap();

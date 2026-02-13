@@ -1,3 +1,6 @@
+//! Useful keyboard related types
+//! Contains all physical keycodes from "/usr/include/linux/input-event-codes.h"
+
 /// This is the code that maps to a physical button on the keyboard, irrespective of any locales
 /// or anything else. To get a name for the key, use the constants defined in this file from the
 /// below proc_macro `get_keys!()`. It sources its key names from "/usr/include/linux/input-event-codes.h".
