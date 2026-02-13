@@ -15,6 +15,8 @@ impl WindowAble for State {
         for x in 0..frame.width {
             for y in 0..frame.height {
                 let index = ((y * frame.width + x) * 4) as usize;
+
+                // Draw a cross across the whole screen, intersecting at the States position
                 if x == self.pos_x as u32 || y == self.pos_y as u32 {
                     buffer[index + 0] = 0;
                     buffer[index + 1] = 0;
@@ -43,10 +45,13 @@ impl WindowAble for State {
     fn update(&mut self, context: wlib::Context) -> Option<wlib::WLibRequest> {
         self.close_requested = context.close_requested;
 
+        // Only close the window if the user accepts the close action
         if self.close_requested && context.pressed_keys.contains_key(&wlib::keys::KEY_Y) {
             return Some(wlib::WLibRequest::CloseAccepted);
         }
 
+        // If the m key is pressed, toggle the mouse mode.
+        // This is done via the event queue because we specfically want to activiate on key press
         if context.event_queue.iter().any(|event| {
             matches!(
                 event,
@@ -75,6 +80,7 @@ impl WindowAble for State {
             self.pos_x += speed;
         }
 
+        // Override keyboard input and set position to mouse position
         if self.is_mouse_mode {
             (self.pos_x, self.pos_y) = context.mouse_state.position;
         }
