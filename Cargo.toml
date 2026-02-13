@@ -2,7 +2,7 @@
 name = "wlib"
 description = "A simple wayland windowing library that gives you a pixel buffer and not much else"
 license = "MIT"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 
 [dependencies]

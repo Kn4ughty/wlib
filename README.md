@@ -1,7 +1,7 @@
 # Wlib
 A simple library for creating a wayland window and manipulating its raw pixel buffer.
 
-(crates.io)[https://crates.io/crates/wlib], (docs.rs)[https://docs.rs/wlib/latest/wlib/]
+[crates.io](https://crates.io/crates/wlib), [docs.rs](https://docs.rs/wlib/latest/wlib/)
 
 ## Use case
 If you want to create a CPU rendered application, and have wayland support.
