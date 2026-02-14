@@ -12,6 +12,8 @@ For example, a doomlike game or a software rasteriser.
 - Custom window sizing
 - Confirm close
 
+## Requirements
+- Building needs `linux-headers` installed to get the named raw key codes.
 
 ## Example
 
