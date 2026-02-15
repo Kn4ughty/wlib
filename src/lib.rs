@@ -558,12 +558,15 @@ impl KeyboardHandler for WindowManager {
         _: &wl_keyboard::WlKeyboard,
         surface: &wl_surface::WlSurface,
         _: u32,
-        _: &[u32],
-        _keysyms: &[Keysym],
+        raw: &[u32],
+        keysyms: &[Keysym],
     ) {
         if self.window.wl_surface() == surface {
             // println!("Keyboard focus on window with pressed syms: {keysyms:?}");
             self.keyboard_focus = true;
+            for (rawk, sym) in raw.iter().zip(keysyms.iter()) {
+                self.context.pressed_keys.insert(*rawk, *sym);
+            }
         }
     }
 
@@ -578,6 +581,7 @@ impl KeyboardHandler for WindowManager {
         if self.window.wl_surface() == surface {
             // println!("Release keyboard focus on window");
             self.keyboard_focus = false;
+            self.context.pressed_keys.clear();
         }
     }
 
