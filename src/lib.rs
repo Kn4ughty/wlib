@@ -1,6 +1,3 @@
-//!
-//!
-
 pub mod keys;
 
 use std::collections::{HashMap, HashSet};
@@ -122,6 +119,9 @@ pub struct Context {
     /// List of events since the last frame.
     /// Use it if you specfically need mouse/key(up/down) events or specfic mouse motions.
     pub event_queue: Vec<Event>,
+
+    /// Current size of the window
+    pub window_size: WindowSize,
 }
 
 /// State of the mouse
@@ -189,6 +189,7 @@ struct WindowManager {
 }
 
 /// The pixel size of a window
+#[derive(Debug, Clone)]
 pub struct WindowSize {
     pub width: u32,
     pub height: u32,
@@ -339,6 +340,10 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
                 position: (0.0, 0.0),
                 mouse_buttons_pressed: HashSet::new(),
             },
+            window_size: WindowSize {
+                height: 0,
+                width: 0,
+            },
         },
         settings,
     };
@@ -472,6 +477,11 @@ impl WindowHandler for WindowManager {
             self.width = configure.new_size.0.map(|v| v.get()).unwrap_or(256);
             self.height = configure.new_size.1.map(|v| v.get()).unwrap_or(256);
         }
+
+        self.context.window_size = WindowSize {
+            width: self.width,
+            height: self.height,
+        };
 
         // self.width = configure.new_size.0.map(|v| v.get()).unwrap();
         // self.height = configure.new_size.1.map(|v| v.get()).unwrap();
