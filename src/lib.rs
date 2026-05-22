@@ -4,7 +4,6 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use smithay_client_toolkit::activation::RequestData;
-use smithay_client_toolkit::globals::GlobalData;
 use smithay_client_toolkit::reexports::calloop::EventLoop;
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
 use smithay_client_toolkit::shell::wlr_layer::{LayerShellHandler, LayerSurface};
