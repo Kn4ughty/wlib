@@ -4,8 +4,10 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use smithay_client_toolkit::activation::RequestData;
+use smithay_client_toolkit::globals::GlobalData;
 use smithay_client_toolkit::reexports::calloop::EventLoop;
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
+use smithay_client_toolkit::shell::wlr_layer::{LayerShellHandler, LayerSurface};
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState},
     compositor::{CompositorHandler, CompositorState},
@@ -21,6 +23,7 @@ use smithay_client_toolkit::{
     },
     shell::{
         WaylandSurface,
+        wlr_layer::{Anchor, Layer, LayerShell},
         xdg::{
             XdgShell,
             window::{Window, WindowConfigure, WindowDecorations, WindowHandler},
@@ -138,13 +141,13 @@ pub struct MouseState {
 #[non_exhaustive]
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum MouseButton {
-    BtnLeft,
-    BtnRight,
-    BtnMiddle,
-    BtnSide,
-    BtnExtra,
-    BtnForward,
-    BtnBack,
+    Left,
+    Right,
+    Middle,
+    Side,
+    Extra,
+    Forward,
+    Back,
 }
 
 impl TryFrom<u32> for MouseButton {
@@ -152,17 +155,42 @@ impl TryFrom<u32> for MouseButton {
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
-            0x110 => Ok(MouseButton::BtnLeft),
-            0x111 => Ok(MouseButton::BtnRight),
-            0x112 => Ok(MouseButton::BtnMiddle),
-            0x113 => Ok(MouseButton::BtnSide),
-            0x114 => Ok(MouseButton::BtnExtra),
-            0x115 => Ok(MouseButton::BtnForward),
-            0x116 => Ok(MouseButton::BtnBack),
+            0x110 => Ok(MouseButton::Left),
+            0x111 => Ok(MouseButton::Right),
+            0x112 => Ok(MouseButton::Middle),
+            0x113 => Ok(MouseButton::Side),
+            0x114 => Ok(MouseButton::Extra),
+            0x115 => Ok(MouseButton::Forward),
+            0x116 => Ok(MouseButton::Back),
             _ => Err(()),
         }
     }
 }
+
+trait WindowLike {
+    fn wl_wl_surface(&self) -> &wl_surface::WlSurface;
+    fn wl_commit(&self);
+}
+
+impl WindowLike for LayerSurface {
+    fn wl_commit(&self) {
+        LayerSurface::commit(self);
+    }
+    fn wl_wl_surface(&self) -> &wl_surface::WlSurface {
+        LayerSurface::wl_surface(self)
+    }
+}
+
+impl WindowLike for Window {
+    fn wl_commit(&self) {
+        Window::commit(self);
+    }
+    fn wl_wl_surface(&self) -> &wl_surface::WlSurface {
+        Window::wl_surface(self)
+    }
+}
+
+// impl WindowLike for
 
 struct WindowManager {
     registry_state: RegistryState,
@@ -177,7 +205,7 @@ struct WindowManager {
     width: u32,
     height: u32,
     buffer: Option<Buffer>,
-    window: Window,
+    window: Box<dyn WindowLike>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     keyboard_focus: bool,
     pointer: Option<wl_pointer::WlPointer>,
@@ -196,7 +224,6 @@ pub struct WindowSize {
 }
 
 /// The available settings to configure window stuff
-#[derive(Default)]
 pub struct WLibSettings {
     /// If the window size should be static instead of updating when needed.
     window_static_size: Option<WindowSize>,
@@ -204,9 +231,29 @@ pub struct WLibSettings {
     /// Title of the window to show in in window selectors, decorations etc.
     window_title: String,
 
-    /// App Id. Should be [reverse domain
-    /// notation](https://en.wikipedia.org/wiki/Reverse_domain_name_notation)
+    /// App Id. Should be [reverse domain notation](https://en.wikipedia.org/wiki/Reverse_domain_name_notation)
     app_id: String,
+
+    /// Should this window be a layer shell?
+    /// If this is not set, all related fields will be ignored.
+    pub is_layer_shell: bool,
+
+    pub layer_shell_layer: Layer,
+
+    pub layer_shell_anchor: Anchor,
+}
+
+impl Default for WLibSettings {
+    fn default() -> Self {
+        WLibSettings {
+            window_static_size: None,
+            window_title: "".to_string(),
+            app_id: "".to_string(),
+            is_layer_shell: false,
+            layer_shell_layer: Layer::Bottom,
+            layer_shell_anchor: Anchor::LEFT,
+        }
+    }
 }
 
 impl WLibSettings {
@@ -226,6 +273,21 @@ impl WLibSettings {
 
     pub fn with_app_id(mut self, id: &str) -> Self {
         self.app_id = id.to_string();
+        self
+    }
+
+    pub fn with_layer_shell(mut self) -> Self {
+        self.is_layer_shell = true;
+        self
+    }
+
+    pub fn with_layer_shell_layer(mut self, layer: Layer) -> Self {
+        self.layer_shell_layer = layer;
+        self
+    }
+
+    pub fn with_layer_shell_anchor(mut self, anchor: Anchor) -> Self {
+        self.layer_shell_anchor = anchor;
         self
     }
 }
@@ -248,6 +310,7 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
     // The compositor (not to be confused with the server which is commonly called the compositor) allows
     // configuring surfaces to be presented.
     let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor not available");
+
     // For desktop platforms, the XDG shell is the standard protocol for creating desktop windows.
     let xdg_shell = XdgShell::bind(&globals, &qh).expect("xdg shell is not available");
 
@@ -257,25 +320,37 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
     // If the compositor supports xdg-activation it probably wants us to use it to get focus
     let xdg_activation = ActivationState::bind(&globals, &qh).ok();
 
+    let layer_shell = LayerShell::bind(&globals, &qh).expect("bind layer shell");
+
     // A window is created from a surface.
     let surface = compositor.create_surface(&qh);
 
+    let window: Box<dyn WindowLike> = if settings.is_layer_shell {
+        let layer_surface =
+            layer_shell.create_layer_surface(&qh, surface, Layer::Overlay, None::<String>, None);
+
+        layer_surface.set_anchor(settings.layer_shell_anchor);
+
+        Box::new(layer_surface)
+    } else {
+        let window = xdg_shell.create_window(surface, WindowDecorations::RequestServer, &qh);
+
+        // Configure the window, this may include hints to the compositor about the desired minimum size of the
+        // window, app id for WM identification, the window title, etc.
+        window.set_title(&settings.window_title);
+
+        // GitHub does not let projects use the `org.github` domain but the `io.github` domain is fine.
+        window.set_app_id(&settings.app_id);
+        Box::new(window)
+    };
+
     // And then we can create the window.
-    let window = xdg_shell.create_window(surface, WindowDecorations::RequestServer, &qh);
-
-    // Configure the window, this may include hints to the compositor about the desired minimum size of the
-    // window, app id for WM identification, the window title, etc.
-    window.set_title(&settings.window_title);
-
-    // GitHub does not let projects use the `org.github` domain but the `io.github` domain is fine.
-    window.set_app_id(&settings.app_id);
-
     // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.
     // For more info, see WaylandSurface::commit
     //
     // The compositor will respond with an initial configure that we can then use to present to the window with
     // the correct options.
-    window.commit();
+    window.wl_commit();
 
     // To request focus, we first need to request a token
     if let Some(activation) = xdg_activation.as_ref() {
@@ -283,7 +358,7 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
             &qh,
             RequestData {
                 seat_and_serial: None,
-                surface: Some(window.wl_surface().clone()),
+                surface: Some(window.wl_wl_surface().clone()),
                 app_id: Some(String::from(
                     "io.github.smithay.client-toolkit.SimpleWindow",
                 )),
@@ -295,8 +370,8 @@ pub fn run(state: Box<dyn WindowAble>, settings: WLibSettings) {
         // If both min and max size are set to the same value, it means the size is static.
         // from (niri docs)[https://github.com/YaLTeR/niri/wiki/Floating-Windows], if this is the
         // case the window is set to be floating in tiling window managers
-        window.set_min_size(Some((dimensions.width, dimensions.height)));
-        window.set_max_size(Some((dimensions.width, dimensions.height)));
+        // window.set_min_size(Some((dimensions.width, dimensions.height)));
+        // window.set_max_size(Some((dimensions.width, dimensions.height)));
 
         (dimensions.width, dimensions.height)
     } else {
@@ -501,7 +576,7 @@ impl ActivationHandler for WindowManager {
         self.xdg_activation
             .as_ref()
             .unwrap()
-            .activate::<WindowManager>(self.window.wl_surface(), token);
+            .activate::<WindowManager>(self.window.wl_wl_surface(), token);
     }
 }
 
@@ -571,7 +646,7 @@ impl KeyboardHandler for WindowManager {
         raw: &[u32],
         keysyms: &[Keysym],
     ) {
-        if self.window.wl_surface() == surface {
+        if self.window.wl_wl_surface() == surface {
             // println!("Keyboard focus on window with pressed syms: {keysyms:?}");
             self.keyboard_focus = true;
             for (rawk, sym) in raw.iter().zip(keysyms.iter()) {
@@ -588,7 +663,7 @@ impl KeyboardHandler for WindowManager {
         surface: &wl_surface::WlSurface,
         _: u32,
     ) {
-        if self.window.wl_surface() == surface {
+        if self.window.wl_wl_surface() == surface {
             // println!("Release keyboard focus on window");
             self.keyboard_focus = false;
             self.context.pressed_keys.clear();
@@ -662,7 +737,7 @@ impl PointerHandler for WindowManager {
     ) {
         for event in events {
             // Ignore events for other surfaces
-            if &event.surface != self.window.wl_surface() {
+            if &event.surface != self.window.wl_wl_surface() {
                 continue;
             }
 
@@ -757,25 +832,54 @@ impl WindowManager {
 
         // Damage the entire window
         self.window
-            .wl_surface()
+            .wl_wl_surface()
             .damage_buffer(0, 0, self.width as i32, self.height as i32);
 
         // Request our next frame
         self.window
-            .wl_surface()
-            .frame(qh, self.window.wl_surface().clone());
+            .wl_wl_surface()
+            .frame(qh, self.window.wl_wl_surface().clone());
 
         // Attach and commit to present.
         buffer
-            .attach_to(self.window.wl_surface())
+            .attach_to(self.window.wl_wl_surface())
             .expect("buffer attach");
-        self.window.commit();
+        self.window.wl_commit();
     }
 
     fn handle_update(&mut self, request: Option<WLibRequest>) {
         match request {
             Some(WLibRequest::CloseAccepted) => self.close_accepted = true,
             None => {}
+        }
+    }
+}
+
+impl LayerShellHandler for WindowManager {
+    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _layer: &LayerSurface) {
+        self.close_accepted = true;
+    }
+    fn configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        _layer: &LayerSurface,
+        configure: smithay_client_toolkit::shell::wlr_layer::LayerSurfaceConfigure,
+        _serial: u32,
+    ) {
+        // todo!()
+        self.buffer = None;
+        self.width = configure.new_size.0;
+        self.height = configure.new_size.1;
+
+        self.context.window_size = WindowSize {
+            width: self.width,
+            height: self.height,
+        };
+
+        if self.first_configure {
+            self.first_configure = false;
+            self.draw(conn, qh);
         }
     }
 }
@@ -791,6 +895,8 @@ delegate_pointer!(WindowManager);
 delegate_xdg_shell!(WindowManager);
 delegate_xdg_window!(WindowManager);
 delegate_activation!(WindowManager);
+smithay_client_toolkit::delegate_layer!(WindowManager);
+// smithay_client_toolkit::shell::wlr_layer::delegate_layer!(WindowManager);
 
 delegate_registry!(WindowManager);
 

@@ -22,6 +22,28 @@ fn get_keys() -> String {
 }
 
 fn event_codes_file_path() -> PathBuf {
+    let target_file = "linux/input-event-codes.h";
+
+    if let Ok(cflags) = std::env::var("NIX_CFLAGS_COMPILE") {
+        for flag in cflags.split_whitespace() {
+            let candidate = PathBuf::from(flag.trim()).join(target_file);
+            eprintln!("{:?}", candidate);
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+    }
+
+    if let Ok(cpath) = std::env::var("CPATH") {
+        for path in std::env::split_paths(&cpath) {
+            let candidate = path.join(target_file);
+            eprintln!("{:?}", candidate);
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+    }
+
     PathBuf::from("/usr/include/linux/input-event-codes.h")
 }
 
